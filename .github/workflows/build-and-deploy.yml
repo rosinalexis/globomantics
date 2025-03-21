@@ -50,6 +50,8 @@ jobs:
     name: create-artifact
     needs: [security-checks-and-build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       semver: ${{ steps.set-version.outputs.version }}
 
