@@ -2,27 +2,103 @@ name: Build and deploy web game
 
 on:
   push:
-    branches: [ main ]
+    branches: [develop]
+  pull_request:
+    branches: [main, recette]
+  workflow_dispatch:
 
+permissions:
+  contents: write
 env:
-  AZURE_WEBAPP_NAME: 'globomantics-web-game'   # set this to your application's name
-  AZURE_WEBAPP_PACKAGE_PATH: '.'      # set this to the path to your web app project, defaults to the repository root
-  DOTNET_VERSION: '5.0'           
+  AZURE_WEBAPP_NAME: "globomantics-web-game"
+  AZURE_WEBAPP_PACKAGE_PATH: "."
+  ARTIFACT_NAME: "globomantics-game"
+  DOTNET_VERSION: "9.0"
 
 jobs:
-  build:
+  security-checks-and-build:
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
 
     steps:
-      - uses: actions/checkout@main
-      
-      - name: 'Setup .NET Core'
-        uses: actions/setup-dotnet@v1
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }} 
-      
-      - name: 'Build app package'
+          languages: csharp
+          queries: security-and-quality
+
+      - name: "Setup .NET Core"
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: "Build app package"
         run: |
           dotnet restore '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/src/web-game/Globomantics.sln'
           dotnet build '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/src/web-game/Globomantics.sln' --configuration Release
-          dotnet publish '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/src/web-game/Globomantics.sln' -c Release -o '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/app-package' 
+          dotnet publish '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/src/web-game/Globomantics.sln' -c Release -o '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/app-package'
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:csharp"
+
+  package:
+    name: create-artifact
+    needs: [security-checks-and-build]
+    runs-on: ubuntu-latest
+    outputs:
+      semver: ${{ steps.set-version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version
+        id: set-version
+        run: |
+          current_version=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+          current_version=${current_version#v}
+          IFS='.' read -r -a version_parts <<< "$current_version"
+          major=${version_parts[0]}
+          minor=${version_parts[1]}
+          patch=${version_parts[2]}
+          
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            new_version="$((major + 1)).0.0"
+          elif [ "$GITHUB_REF_NAME" = "recette" ]; then
+            new_version="$major.$((minor + 1)).0"
+          else
+            new_version="$major.$minor.$((patch + 1))"
+          fi
+          
+          echo "version=${new_version}" >> $GITHUB_OUTPUT
+
+      - name: Publish
+        run: dotnet publish '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/src/web-game/Globomantics.sln' -c Release -o '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/app-package'
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}-${{ steps.set-version.outputs.version }}
+          path: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/app-package"
+
+  release:
+    name: create-release
+    needs: [package]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ needs.package.outputs.semver }}
+          release_name: release v${{ needs.package.outputs.semver }}
+          draft: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/recette' }}
+          prerelease: ${{ github.ref == 'refs/heads/recette' }}
