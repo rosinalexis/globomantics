@@ -8,13 +8,18 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_WEBAPP_NAME: "globomantics-web-game" # set this to your application's name
-  AZURE_WEBAPP_PACKAGE_PATH: "." # set this to the path to your web app project, defaults to the repository root
+  AZURE_WEBAPP_NAME: "globomantics-web-game"
+  AZURE_WEBAPP_PACKAGE_PATH: "."
+  ARTIFACT_NAME: "globomantics-game"
   DOTNET_VERSION: "9.0"
 
 jobs:
   security-checks:
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +45,7 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:csharp"
-          
+
   package:
     name: Create Artifact
     needs: [security-checks]
