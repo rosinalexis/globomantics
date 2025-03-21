@@ -10,14 +10,20 @@ on:
 env:
   AZURE_WEBAPP_NAME: "globomantics-web-game" # set this to your application's name
   AZURE_WEBAPP_PACKAGE_PATH: "." # set this to the path to your web app project, defaults to the repository root
-  DOTNET_VERSION: "5.0"
+  DOTNET_VERSION: "9.0"
 
 jobs:
-  build:
+  security-checks:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+          queries: security-and-quality
 
       - name: "Setup .NET Core"
         uses: actions/setup-dotnet@v3
@@ -29,3 +35,36 @@ jobs:
           dotnet restore '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/src/web-game/Globomantics.sln'
           dotnet build '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/src/web-game/Globomantics.sln' --configuration Release
           dotnet publish '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/src/web-game/Globomantics.sln' -c Release -o '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/app-package'
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:csharp"
+          
+  package:
+    name: Create Artifact
+    needs: [security-checks]
+    runs-on: ubuntu-latest
+    outputs:
+      semver: ${{ steps.set-version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version
+        id: set-version
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "version=1.0.0" >> $GITHUB_OUTPUT
+          else
+            echo "version=0.1.0-${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish
+        run: dotnet publish '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/src/web-game/Globomantics.sln' -c Release -o '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/app-package'
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}-${{ steps.set-version.outputs.version }}
+          path: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/app-package"
