@@ -75,7 +75,7 @@ jobs:
             new_version="$major.$minor.$((patch + 1))"
           fi
           
-          echo "version=$new_version" >> $GITHUB_OUTPUT
+          echo "version=${new_version}" >> $GITHUB_OUTPUT
 
       - name: Publish
         run: dotnet publish '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/src/web-game/Globomantics.sln' -c Release -o '${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/app-package'
@@ -92,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: create-release
+      - name: Create Release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
