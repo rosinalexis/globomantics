@@ -59,10 +59,7 @@ jobs:
       - name: Set version
         id: set-version
         run: |
-          current_version=$(git describe --tags --abbrev=0)
-          if [ -z "$current_version" ]; then
-            current_version="0.0.0"
-          fi
+          current_version=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
           IFS='.' read -r -a version_parts <<< "$current_version"
           major=${version_parts[0]}
           minor=${version_parts[1]}
