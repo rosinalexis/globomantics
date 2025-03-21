@@ -7,6 +7,8 @@ on:
     branches: [main, recette]
   workflow_dispatch:
 
+permissions:
+  contents: write
 env:
   AZURE_WEBAPP_NAME: "globomantics-web-game"
   AZURE_WEBAPP_PACKAGE_PATH: "."
@@ -50,8 +52,6 @@ jobs:
     name: create-artifact
     needs: [security-checks-and-build]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     outputs:
       semver: ${{ steps.set-version.outputs.version }}
 
@@ -61,7 +61,7 @@ jobs:
       - name: Set version
         id: set-version
         run: |
-          current_version=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
+          current_version=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.1.0")
           IFS='.' read -r -a version_parts <<< "$current_version"
           major=${version_parts[0]}
           minor=${version_parts[1]}
