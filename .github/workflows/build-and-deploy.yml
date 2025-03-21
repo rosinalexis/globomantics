@@ -47,7 +47,7 @@ jobs:
           category: "/language:csharp"
 
   package:
-    name: Create Artifact
+    name: create-artifact
     needs: [security-checks-and-build]
     runs-on: ubuntu-latest
     outputs:
@@ -67,7 +67,7 @@ jobs:
           major=${version_parts[0]}
           minor=${version_parts[1]}
           patch=${version_parts[2]}
-
+          
           if [ "$GITHUB_REF_NAME" = "main" ]; then
             new_version="$((major + 1)).0.0"
           elif [ "$GITHUB_REF_NAME" = "recette" ]; then
@@ -75,7 +75,7 @@ jobs:
           else
             new_version="$major.$minor.$((patch + 1))"
           fi
-
+          
           echo "version=$new_version" >> $GITHUB_OUTPUT
 
       - name: Publish
@@ -88,17 +88,17 @@ jobs:
           path: "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}/app-package"
 
   release:
-    name: Create Release
+    name: create-release
     needs: [package]
     runs-on: ubuntu-latest
 
     steps:
-      - name: Create Release
+      - name: create-release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: v${{ needs.package.outputs.semver }}
-          release_name: Release v${{ needs.package.outputs.semver }}
+          release_name: release v${{ needs.package.outputs.semver }}
           draft: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/recette' }}
           prerelease: ${{ github.ref == 'refs/heads/recette' }}
